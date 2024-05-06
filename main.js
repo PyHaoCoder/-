@@ -17,9 +17,9 @@ const types = require('@babel/types')
 const fs = require('fs')
 
 
-process.argv.length > 2 ? loaderFile = process.argv[2] : loaderFile = __dirname + '/loader.js'
-process.argv.length > 3 ? modulesFile = process.argv[3] : modulesFile = __dirname + '/modules.js'
-process.argv.length > 4 ? executorFile = process.argv[4] : executorFile = __dirname + '/executor.js'
+process.argv.length > 2 ? loaderFile = process.argv[2] : loaderFile = __dirname + '/main/loader.js'
+process.argv.length > 3 ? modulesFile = process.argv[3] : modulesFile = __dirname + '/main/modules.js'
+process.argv.length > 4 ? executorFile = process.argv[4] : executorFile = __dirname + '/main/executor.js'
 
 // 读取输入文件（加载器、模块、执行器）或使用默认路径
 loaderCode = fs.readFileSync(loaderFile, {encoding: 'utf-8'})
