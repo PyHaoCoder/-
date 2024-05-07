@@ -25,7 +25,7 @@ loaderCode = fs.readFileSync(loaderFile, {encoding: 'utf-8'})
 modulesCode = fs.readFileSync(modulesFile, {encoding: 'utf-8'})
 executorCode = fs.readFileSync(executorFile, {encoding: 'utf-8'})
 
-// 执行器中调用加载器的函数名（）
+// 执行器中调用加载器的函数名
 execFuncName = 'n'
 
 console.time("处理完毕，耗时");
