@@ -16,7 +16,6 @@ const generator = require('@babel/generator').default
 const types = require('@babel/types')
 const fs = require('fs')
 
-
 process.argv.length > 2 ? loaderFile = process.argv[2] : loaderFile = __dirname + '/main/loader.js'
 process.argv.length > 3 ? modulesFile = process.argv[3] : modulesFile = __dirname + '/main/modules.js'
 process.argv.length > 4 ? executorFile = process.argv[4] : executorFile = __dirname + '/main/executor.js'
@@ -25,6 +24,9 @@ process.argv.length > 4 ? executorFile = process.argv[4] : executorFile = __dirn
 loaderCode = fs.readFileSync(loaderFile, {encoding: 'utf-8'})
 modulesCode = fs.readFileSync(modulesFile, {encoding: 'utf-8'})
 executorCode = fs.readFileSync(executorFile, {encoding: 'utf-8'})
+
+// 执行器中调用加载器的函数名（）
+execFuncName = 'n'
 
 console.time("处理完毕，耗时");
 
@@ -69,6 +71,19 @@ traverse(loaderAst, {
 
         // 获取 ReturnStatement 类型节点的子节点，object.name 代表对象名称，property.name 代表下标名称
         let {object, property} = body.body[length - 1].argument.expressions[0].callee.object
+
+        // 创建吐模块节点，不使用的话注释代码
+        let consoleNode = types.expressionStatement(
+            types.callExpression(
+                types.memberExpression(
+                    types.identifier('console'),
+                    types.identifier('log')
+                ),
+                [types.identifier(property.name)]
+            )
+        )
+        types.addComment(consoleNode, 'leading', '自动吐模块') // 添加注释
+        body.body.splice(length - 1, 0, consoleNode)  // 添加节点到加载器函数体内
 
         // 创建存储函数对象的赋值节点
         let assignmentNode = types.expressionStatement(
@@ -136,7 +151,7 @@ traverse(executorAst, {
         let {callee, arguments} = path.node
         if (types.isIdentifier(callee)) {
             // 判断是否为加载器名称
-            if (callee.name !== exportName && callee.name !=='n') {
+            if (callee.name !== exportName && callee.name !== execFuncName) {
                 return
             }
             // 判断传递的参数是否符合条件
@@ -148,7 +163,7 @@ traverse(executorAst, {
         } else if (types.isMemberExpression(callee)) {
             let {object, property} = callee
             // 判断是否为加载器名称
-            if ((object.name !== exportName && object.name !=='n') || property.name !== 'n') {
+            if ((object.name !== exportName && object.name !== execFuncName) || property.name !== 'n') {
                 return
             }
             // 判断传递的参数是否符合条件
@@ -162,14 +177,31 @@ traverse(executorAst, {
 executorCode = generator(executorAst).code
 
 
-// 将所有模块添加到数组中
+// 将所有模块节点添加到数组节点中
 let modulesNode = [], properties;
-properties = modulesAst.program.body[0].expression.type === "ObjectExpression" ? modulesAst.program.body[0].expression.properties : modulesAst.program.body[0].expression.arguments[0].elements[1].properties
-properties.forEach(function (obj) {
+if (modulesAst.program.body[0].expression.type === "ObjectExpression") { // 如果存放模块的是一个纯对象
+    properties = modulesAst.program.body[0].expression.properties
+} else if (modulesAst.program.body[0].expression.arguments[0].elements[1].type === "ObjectExpression") {  // 如果 webpackJsonp 存放模块的是对象
+    properties = modulesAst.program.body[0].expression.arguments[0].elements[1].properties
+} else {
+    properties = modulesAst.program.body[0].expression.arguments[0].elements[1].elements // 如果 webpackJsonp 存放模块的是数组
+}
+
+properties.forEach(function (obj, index) {
+    // 如果是模块节点是函数类型
+    if (types.isFunctionExpression(obj)) {
+        obj = types.objectProperty(types.numericLiteral(index), obj)
+    }
+    // 如果模块节点为null值，返回一个空函数用来占位
+    else if (obj === null) {
+        obj = types.objectProperty(types.numericLiteral(index), types.functionExpression(null, [], types.blockStatement([], [])))
+    }
     modulesNode.push(obj)
 })
+
+
 // 将所有模块添加到加载器自执行函数中
-if (loaderArguments.length>0 && loaderArguments[0].type === "ObjectExpression") {
+if (loaderArguments.length > 0 && loaderArguments[0].type === "ObjectExpression") {
     let combinedArray = loaderArguments[0].properties.concat(modulesNode); // 和加载器中已有的模块合并
     loaderArguments.splice(0, 1, types.objectExpression(combinedArray))
 } else {
@@ -186,6 +218,7 @@ console.log()
 
 // 查看加载器中被调用的模块
 // console.log(exec_funcs)
+
 
 // 返回对象的字符串形式
 function objectToString(obj) {
